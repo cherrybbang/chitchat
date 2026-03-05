@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel
+from supabase import create_client, Client
 
 # 환경 변수 로드
 load_dotenv()
@@ -10,7 +11,13 @@ load_dotenv()
 app = FastAPI()
 
 # OpenAI 클라이언트 생성 (초기화?)
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Supabase
+supabase: Client = create_client(
+    os.getenv("SUPABASE_URL"),
+    os.getenv("SUPABASE_KEY")
+)
 
 # 채팅 요청 데이터 형식
 class ChatRequest(BaseModel):
@@ -21,8 +28,15 @@ class ChatRequest(BaseModel):
 def chat(request: ChatRequest):
     
     user_message = request.message
+
+    # 사용자 메시지 저장
+    supabase.table("messages").insert({
+        "role": "user",
+        "content": user_message
+    }).execute()
     
-    response = client.chat.completions.create(
+    # ai 호출
+    response = openai_client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "user", "content": user_message},
@@ -31,8 +45,13 @@ def chat(request: ChatRequest):
 
     ai_message = response.choices[0].message.content
 
+    # ai 메시지 저장
+    supabase.table("messages").insert({
+        "role": "assistant",
+        "content": ai_message
+    }).execute()
+
     return {
-        "user_message": user_message,
         "ai_message": ai_message
     }
 
