@@ -67,6 +67,19 @@ def get_messages():
     
     return response.data
 
+
+# 채팅 내역 삭제
+@app.delete("/messages/{message_id}")
+def delete_message(message_id: str):
+
+    supabase.table("messages") \
+        .delete() \
+        .eq("id", message_id) \
+        .execute()
+
+    return {"message": "deleted"}
+
+
 # @app.get("/")
 # def root():
 #     return {"message": "Server is running! Let's chat!"}
