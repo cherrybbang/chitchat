@@ -55,6 +55,18 @@ def chat(request: ChatRequest):
         "ai_message": ai_message
     }
 
+
+# 채팅 기록 조회
+@app.get("/messages")
+def get_messages():
+
+    response = supabase.table("messages") \
+        .select("*") \
+        .order("created_at") \
+        .execute()
+    
+    return response.data
+
 # @app.get("/")
 # def root():
 #     return {"message": "Server is running! Let's chat!"}
