@@ -1,77 +1,82 @@
 import os
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from openai import OpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from supabase import create_client, Client
 
-# 환경 변수 로드
 load_dotenv()
 
 app = FastAPI()
 
-# OpenAI 클라이언트 생성 (초기화?)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Supabase
 supabase: Client = create_client(
     os.getenv("SUPABASE_URL"),
     os.getenv("SUPABASE_KEY")
 )
 
-# 채팅 요청 데이터 형식
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(max_length=1000)
+    room_id: str
 
-# 채팅 API (POST)
 @app.post("/chat")
 def chat(request: ChatRequest):
-    
-    user_message = request.message
-
-    # 사용자 메시지 저장
     supabase.table("messages").insert({
+        "room_id": request.room_id,
         "role": "user",
-        "content": user_message
+        "content": request.message
     }).execute()
-    
-    # ai 호출
+
+    history = supabase.table("messages") \
+        .select("*") \
+        .eq("room_id", request.room_id) \
+        .order("created_at") \
+        .execute()
+
+    recent = history.data[-20:]
+    messages = [
+        {"role": "assistant" if msg["role"] == "bot" else "user", "content": msg["content"]}
+        for msg in recent
+    ]
+
     response = openai_client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[
-            {"role": "user", "content": user_message},
-        ]
+        messages=messages,
+        max_tokens=500
     )
 
     ai_message = response.choices[0].message.content
 
-    # ai 메시지 저장
     supabase.table("messages").insert({
-        "role": "assistant",
+        "room_id": request.room_id,
+        "role": "bot",
         "content": ai_message
     }).execute()
 
-    return {
-        "ai_message": ai_message
-    }
+    return {"ai_message": ai_message}
 
 
-# 채팅 기록 조회
 @app.get("/messages")
 def get_messages():
-
     response = supabase.table("messages") \
         .select("*") \
         .order("created_at") \
         .execute()
-    
+
     return response.data
 
 
-# 채팅 내역 삭제
 @app.delete("/messages/{message_id}")
 def delete_message(message_id: str):
-
     supabase.table("messages") \
         .delete() \
         .eq("id", message_id) \
