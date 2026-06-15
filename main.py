@@ -78,14 +78,14 @@ def chat(request: ChatRequest, current_user=Depends(get_current_user)):
     return {"ai_message": ai_message}
 
 
-@app.get("/messages")
-def get_messages(current_user=Depends(get_current_user)):
-    response = supabase.table("messages") \
-        .select("*") \
-        .order("created_at") \
-        .execute()
+# @app.get("/messages")
+# def get_messages(current_user=Depends(get_current_user)):
+#     response = supabase.table("messages") \
+#         .select("*") \
+#         .order("created_at") \
+#         .execute()
 
-    return response.data
+#     return response.data
 
 
 @app.delete("/messages/{message_id}")
