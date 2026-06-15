@@ -1,6 +1,7 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel, Field
@@ -24,12 +25,24 @@ supabase: Client = create_client(
     os.getenv("SUPABASE_KEY")
 )
 
+# 토큰 검증 함수 추가
+security = HTTPBearer()
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        result = supabase.auth.get_user(credentials.credentials)
+        if not result.user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        return result.user
+    except Exception:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
 class ChatRequest(BaseModel):
     message: str = Field(max_length=1000)
     room_id: str
 
 @app.post("/chat")
-def chat(request: ChatRequest):
+def chat(request: ChatRequest, current_user=Depends(get_current_user)):
     supabase.table("messages").insert({
         "room_id": request.room_id,
         "role": "user",
@@ -66,7 +79,7 @@ def chat(request: ChatRequest):
 
 
 @app.get("/messages")
-def get_messages():
+def get_messages(current_user=Depends(get_current_user)):
     response = supabase.table("messages") \
         .select("*") \
         .order("created_at") \
@@ -76,7 +89,7 @@ def get_messages():
 
 
 @app.delete("/messages/{message_id}")
-def delete_message(message_id: str):
+def delete_message(message_id: str, current_user=Depends(get_current_user)):
     supabase.table("messages") \
         .delete() \
         .eq("id", message_id) \
