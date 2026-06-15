@@ -9,7 +9,8 @@ from supabase import create_client, Client
 
 load_dotenv()
 
-app = FastAPI()
+# /docs 문서 노출 방지
+app = FastAPI(docs_url=None, redoc_url=None)
 
 app.add_middleware(
     CORSMiddleware,
