@@ -35,7 +35,8 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         if not result.user:
             raise HTTPException(status_code=401, detail="Unauthorized")
         return result.user
-    except Exception:
+    except Exception as e:
+        print("AUTH ERROR:", e)
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 class ChatRequest(BaseModel):
