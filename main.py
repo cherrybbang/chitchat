@@ -12,9 +12,11 @@ load_dotenv()
 # /docs 문서 노출 방지
 app = FastAPI(docs_url=None, redoc_url=None)
 
+origins = os.getenv("ALLOWED_ORIGINS").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
