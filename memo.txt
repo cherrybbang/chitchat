@@ -7,6 +7,7 @@ Uvicorn: 외부(클라이언트)에서 들어오는 HTTP 요청을 FastAPI로 �
 
 <코드 설명 및 이해하기>
 
+-------------------------------> 임포트 및 초기 설정
 import os
 from fastapi import FastAPI 등등
 
@@ -19,9 +20,9 @@ app = FastAPI(docs_url=None, redoc_url=None)
 Swagger(/docs)와 ReDoc(/redoc) 자동 문서 페이지를 비활성화해서 API 구조가 외부에 노출되지 않도록 한다.
 만약 문서가 보이게 하고 싶다면, (docs_url="/docs", redoc_url="/redoc") 라고 적용하면 된다.
 
---------> 임포트 및 초기 설정
 
 
+-------------------------------> CORS 설정
 origins = os.getenv("ALLOWED_ORIGINS").split(",")
 .env의 ALLOWED_ORIGINS를 불러와서 허용할 프론트엔드 도메인들만 지정한다.
 
@@ -55,9 +56,9 @@ Access-Control-Allow-Headers: *도 일부 브라우저에서 와일드카드가 
 
 이런 규칙이 있는 이유는, 쿠키가 자동으로 넘어가는건 '로그인된 상태 그대로' 요청이 간다는 뜻이라 아무 origin(*)이나 허용해버리면 악성 사이트 혹은 사용자 브라우저를 통해 로그인된 세션으로 몰래 요청을 보낼 수 있기 때문이다. 그래서 브라우저가 credentials를 사용할거면 origin을 정확히 밝혀라라고 하는 것이다.
 
--------> CORS 설정
 
 
+-------------------------------> 외부 클라이언트 initialization
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 supabase: Client = create_client(
@@ -73,9 +74,9 @@ initialization 초기화(처음으로 값/상태를 설정함). reset(이미 있
 생성(creation): "객체를 만든다"는 것 자체
 초기화(initialization): 그 객체가 "쓸 수 있는 상태"가 되도록 값을 채워 넣는 것
 
--------> 외부 클라이언트 initialization
 
 
+-------------------------------> 인증(토큰 검증) 로직
 security = HTTPBearer()
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -92,19 +93,58 @@ HTTPBearer() : 요청 헤더의 Authorization: Bearer <token>을 자동으로 �
 get_current_user : 토큰을 Supabase에 보내 실제 유효한 사용자인지 검증. 유효하지 않으면 401 에러.
 또한, Depends(get_current_user) 형태로 다른 엔드포인트에 주입되어 로그인한 사용자만 접근 가능하도록 의존성(dependency) 역할을 한다.
 
--------> 인증(토큰 검증) 로직
 
 
+-------------------------------> 스키마 정의
 class ChatRequest(BaseModel):
     message: str = Field(max_length=1000)
     room_id: str
 
-/chat 엔드포인트에 들어올 요청 바디의 형태를 정의. Pydantic이 자동으로 타입 검증(문자열인지 뭔지)을 해주고 메시지 길이는 1000자로 제한해준다.
-
+/chat 엔드포인트에 들어올 요청 바디의 형태를 정의. 
+Pydantic이 자동으로 타입 검증(문자열인지 뭔지)을 해주고 메시지 길이는 1000자로 제한해준다.
 
 스키마(schema)란 데이터가 어떤 모양이어야 하는지를 나타내는 것. 
 ChatRequest는 실제 값이 아니라 /chat으로 들어오는 요청 body는 이런 구조여야 한다는 틀을 정의한 것.
 message: str = Field(max_length=1000) -> 문자열. 1000자 이하.
 room_id: str -> 문자열.
 
--------> 스키마 정의
+
+
+-------------------------------> 엔드포인트
+*사용자 메시지 저장
+supabase.table("messages").insert({
+        "room_id": request.room_id,
+        "role": "user",
+        "content": request.message
+    }).execute()
+
+*해당 방의 대화 내역 조회
+history = supabase.table("messages") \
+        .select("*") \
+        .eq("room_id", request.room_id) \
+        .order("created_at") \
+        .execute()
+
+*최근 대화 20개만 보여주기 (토큰 절약)
+recent = history.data[-20:]
+
+*OpenAI 형식으로 변환
+messages = [...]
+
+*OpenAI에 질문
+response = openai_client.chat.completions.create(...)
+ai_message = response.choices[0].message.content
+
+*AI 응답도 DB에 저장
+supabase.table("messages").insert({...}).execute()
+
+
+*삭제 엔드포인트
+@app.delete("/messages/{message_id}")
+def delete_message(message_id: str, current_user=Depends(get_current_user)):
+    supabase.table("messages") \
+        .delete() \
+        .eq("id", message_id) \
+        .execute()
+
+    return {"message": "deleted"}

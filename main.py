@@ -82,6 +82,8 @@ def chat(request: ChatRequest, current_user=Depends(get_current_user)):
     return {"ai_message": ai_message}
 
 
+# 전체 메시지를 가져오는 엔드포인트. 
+# room_id 필터없이 모든 유저의 메시지가 노출되는 이슈로 주석처리함.
 # @app.get("/messages")
 # def get_messages(current_user=Depends(get_current_user)):
 #     response = supabase.table("messages") \
@@ -102,6 +104,7 @@ def delete_message(message_id: str, current_user=Depends(get_current_user)):
     return {"message": "deleted"}
 
 
+# 테스트용 엔드포인트.
 # @app.get("/")
 # def root():
 #     return {"message": "Server is running! Let's chat!"}
