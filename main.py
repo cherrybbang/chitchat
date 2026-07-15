@@ -1,4 +1,6 @@
 import os
+import time
+from collections import defaultdict
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -41,12 +43,41 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         print("AUTH ERROR:", e)
         raise HTTPException(status_code=401, detail="Unauthorized")
 
+# Rate limiting 설정 - 사용자 한 명이 무한정 OpenAI를 호출하지 못하도록 제한
+RATE_LIMIT_PER_MINUTE = 15   # 분당 최대 호출 수 (폭주/무한루프 차단)
+RATE_LIMIT_PER_DAY = 300     # 하루 최대 호출 수 (비용 안전망)
+
+# 사용자별 호출 시각 기록. {user_id: [timestamp, ...]}
+# 메모리에 저장하므로 서버 재시작 시 초기화됨 (단일 인스턴스 기준으로 충분)
+user_call_history = defaultdict(list)
+
+def check_rate_limit(current_user=Depends(get_current_user)):
+    now = time.time()
+    user_id = current_user.id
+
+    # 하루(86400초)보다 오래된 기록은 버리고 유지
+    history = [ts for ts in user_call_history[user_id] if now - ts < 86400]
+
+    calls_last_minute = sum(1 for ts in history if now - ts < 60)
+    calls_last_day = len(history)
+
+    if calls_last_minute >= RATE_LIMIT_PER_MINUTE:
+        raise HTTPException(status_code=429, detail="요청이 너무 잦습니다. 잠시 후 다시 시도해주세요.")
+    if calls_last_day >= RATE_LIMIT_PER_DAY:
+        raise HTTPException(status_code=429, detail="하루 호출 한도를 초과했습니다. 내일 다시 시도해주세요.")
+
+    # 이번 호출을 기록
+    history.append(now)
+    user_call_history[user_id] = history
+
+    return current_user
+
 class ChatRequest(BaseModel):
     message: str = Field(max_length=1000)
     room_id: str
 
 @app.post("/chat")
-def chat(request: ChatRequest, current_user=Depends(get_current_user)):
+def chat(request: ChatRequest, current_user=Depends(check_rate_limit)):
     supabase.table("messages").insert({
         "room_id": request.room_id,
         "role": "user",
