@@ -100,7 +100,7 @@ uvicorn main:app --reload
 
 ### 데이터베이스 스키마
 
-<img src="db-schema.png" alt="데이터베이스 스키마" width="600">
+<img src="db-schema.png" alt="데이터베이스 스키마" width="800">
 
 ### 기술 스택
 
@@ -110,7 +110,7 @@ uvicorn main:app --reload
 [ 인증 ] - Supabase Auth + HTTP Bearer  
 [ Deploy ] - Railway 
 
-## 프로젝트 구조
+### 프로젝트 구조
 
 ```
 chitchat/
