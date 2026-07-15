@@ -44,7 +44,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 # Rate limiting 설정 - 사용자 한 명이 무한정 OpenAI를 호출하지 못하도록 제한
-RATE_LIMIT_PER_MINUTE = 2   # 분당 최대 호출 수 (폭주/무한루프 차단)
+RATE_LIMIT_PER_MINUTE = 15   # 분당 최대 호출 수 (폭주/무한루프 차단)
 RATE_LIMIT_PER_DAY = 300     # 하루 최대 호출 수 (비용 안전망)
 
 # 사용자별 호출 시각 기록. {user_id: [timestamp, ...]}
